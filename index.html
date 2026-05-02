@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Loop — Team Board</title>
+<style>
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg:#0d0d1a; --surface:#14142a; --card:#1c1c30;
+  --b1:#22223a; --b2:#2c2c48; --b3:#38385a;
+  --text:#dde3ef; --muted:#5a647a;
+}
+body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+/* ══ IDENTITY SCREEN ══ */
+.id-screen { position:fixed; inset:0; background:linear-gradient(160deg,#09091a,#11102b 50%,#0d0d1a); display:flex; align-items:center; justify-content:center; z-index:2000; transition:opacity .35s,transform .35s; }
+.id-screen.out { opacity:0; pointer-events:none; transform:scale(1.04); }
+.id-box { text-align:center; max-width:580px; width:100%; padding:0 20px; }
+.id-logo { font-size:40px; font-weight:900; letter-spacing:-2px; background:linear-gradient(135deg,#818cf8,#c084fc); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:6px; }
+.id-eyebrow { font-size:11px; color:#3a3a5a; letter-spacing:2px; text-transform:uppercase; margin-bottom:38px; }
+.id-q { font-size:24px; font-weight:800; color:var(--text); margin-bottom:26px; }
+.id-cards { display:flex; gap:14px; justify-content:center; }
+.id-card { background:var(--surface); border:2px solid var(--b2); border-radius:18px; padding:24px 26px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:13px; width:158px; transition:transform .18s,border-color .18s,box-shadow .18s,background .18s; }
+.id-card:hover { transform:translateY(-5px); box-shadow:0 14px 40px rgba(0,0,0,.4); }
+.id-av { width:54px; height:54px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:900; color:#fff; }
+.id-name { font-size:15px; font-weight:800; }
+.id-status { margin-top:16px; font-size:13px; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:12px; }
+.spinner { width:36px; height:36px; border:3px solid var(--b2); border-top-color:#a855f7; border-radius:50%; animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.id-error { color:#f87171; font-size:13px; text-align:center; margin-top:8px; }
+.retry-btn { margin-top:10px; background:#4f46e5; color:#fff; border:none; border-radius:8px; padding:8px 20px; font-size:13px; font-weight:700; cursor:pointer; }
+.retry-btn:hover { opacity:.88; }
+
+/* ══ HEADER ══ */
+header { background:linear-gradient(135deg,#3730a3,#6d28d9 55%,#7c3aed); padding:11px 20px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; gap:12px; box-shadow:0 2px 20px rgba(109,40,217,.45); }
+.hdr-brand { font-size:20px; font-weight:900; letter-spacing:-1px; }
+.hdr-sub { font-size:10.5px; opacity:.55; margin-top:1px; }
+.hdr-right { display:flex; align-items:center; gap:10px; }
+.hdr-me { display:flex; align-items:center; gap:7px; padding:5px 12px; border-radius:20px; font-size:12px; font-weight:700; flex-shrink:0; }
+.hdr-me-av { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:900; color:#fff; }
+.hdr-refresh { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.15); color:rgba(255,255,255,.7); border-radius:8px; padding:5px 11px; font-size:11.5px; font-weight:700; cursor:pointer; transition:background .15s; white-space:nowrap; }
+.hdr-refresh:hover { background:rgba(255,255,255,.2); color:#fff; }
+.filters { display:flex; gap:6px; flex-wrap:wrap; }
+.fil { display:flex; align-items:center; gap:5px; padding:5px 12px; border-radius:20px; font-size:11.5px; font-weight:700; cursor:pointer; border:2px solid transparent; background:rgba(255,255,255,.08); color:rgba(255,255,255,.65); transition:all .15s; }
+.fil:hover { background:rgba(255,255,255,.15); color:#fff; }
+.fil.active { background:rgba(255,255,255,.16); border-color:rgba(255,255,255,.4); color:#fff; }
+.fil-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+
+/* ══ BOARD ══ */
+.board-scroll { flex:1; overflow:auto; padding:14px; position:relative; }
+.board { display:grid; grid-template-columns:repeat(4,minmax(240px,1fr)); gap:12px; min-width:980px; height:100%; }
+.board-overlay { position:absolute; inset:0; background:rgba(13,13,26,.55); display:flex; align-items:center; justify-content:center; z-index:10; }
+.board-overlay.hidden { display:none; }
+
+/* ══ COLUMN ══ */
+.col { background:var(--surface); border-radius:13px; border:1px solid var(--b1); display:flex; flex-direction:column; overflow:hidden; min-height:0; }
+.col-head { padding:10px 13px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; border-bottom:2px solid; }
+.c-todo  .col-head { border-color:#475569; }
+.c-asgn  .col-head { border-color:#f59e0b; }
+.c-doing .col-head { border-color:#3b82f6; }
+.c-done  .col-head { border-color:#22c55e; }
+.col-label { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:1.2px; }
+.c-todo  .col-label { color:#6b7a94; }
+.c-asgn  .col-label { color:#f59e0b; }
+.c-doing .col-label { color:#3b82f6; }
+.c-done  .col-label { color:#22c55e; }
+.col-n { background:var(--card); border:1px solid var(--b2); border-radius:7px; padding:1px 7px; font-size:11px; font-weight:700; color:var(--muted); }
+.col-body { flex:1; overflow-y:auto; padding:9px; display:flex; flex-direction:column; gap:7px; }
+.col-body::-webkit-scrollbar { width:3px; }
+.col-body::-webkit-scrollbar-thumb { background:var(--b3); border-radius:2px; }
+.col-empty { text-align:center; color:var(--b3); font-size:12px; padding:22px 0; user-select:none; }
+
+/* ══ CARD ══ */
+.card { background:var(--card); border:1px solid var(--b2); border-radius:10px; padding:11px 12px; cursor:pointer; transition:transform .15s,box-shadow .15s,border-color .15s; }
+.card:hover { transform:translateY(-2px); box-shadow:0 6px 22px rgba(0,0,0,.35); border-color:var(--b3); }
+.card-title { font-size:13px; font-weight:600; line-height:1.45; color:var(--text); margin-bottom:9px; }
+.card-bottom { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.chip { display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border-radius:8px; font-size:11px; font-weight:700; }
+.chip-dot { width:5px; height:5px; border-radius:50%; }
+.card-right { display:flex; align-items:center; gap:5px; }
+.cc-badge { display:flex; align-items:center; gap:3px; background:var(--b1); border-radius:7px; padding:2px 7px; font-size:10.5px; color:var(--muted); }
+.btn-sm { padding:3px 9px; border-radius:7px; border:1px solid var(--b2); background:var(--b1); color:var(--muted); font-size:11px; font-weight:700; cursor:pointer; transition:background .13s,color .13s; white-space:nowrap; }
+.btn-sm:hover { background:var(--b2); color:var(--text); }
+.btn-sm:disabled { opacity:.45; cursor:not-allowed; }
+
+/* ══ ADD BAR ══ */
+.add-bar { padding:10px 16px; background:#0a0a16; border-top:1px solid var(--b1); display:flex; gap:8px; flex-shrink:0; }
+.add-input { flex:1; background:var(--card); border:1px solid var(--b2); border-radius:9px; padding:9px 14px; color:var(--text); font-size:13px; outline:none; transition:border-color .18s; }
+.add-input:focus { border-color:#6366f1; }
+.add-input::placeholder { color:#2a2a44; }
+.add-btn { background:linear-gradient(135deg,#4f46e5,#7c3aed); color:#fff; border:none; border-radius:9px; padding:9px 20px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; transition:opacity .15s; }
+.add-btn:hover { opacity:.88; }
+.add-btn:disabled { opacity:.45; cursor:not-allowed; }
+
+/* ══ TOAST ══ */
+.toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); padding:10px 18px; border-radius:10px; font-size:13px; font-weight:600; z-index:3000; animation:fadeUp .2s ease; white-space:nowrap; }
+@keyframes fadeUp { from{opacity:0;transform:translate(-50%,6px)} to{opacity:1;transform:translate(-50%,0)} }
+.toast-error   { background:#1e1020; border:1px solid #dc2626; color:#f87171; }
+.toast-success { background:#101e14; border:1px solid #16a34a; color:#4ade80; }
+.toast-info    { background:#101828; border:1px solid #2563eb; color:#60a5fa; }
+
+/* ══ ASSIGN MODAL ══ */
+.overlay { position:fixed; inset:0; background:rgba(0,0,0,.62); display:flex; align-items:center; justify-content:center; z-index:800; opacity:0; pointer-events:none; transition:opacity .2s; backdrop-filter:blur(4px); }
+.overlay.show { opacity:1; pointer-events:auto; }
+.modal { background:#181828; border:1px solid var(--b2); border-radius:16px; padding:20px; width:290px; box-shadow:0 24px 60px rgba(0,0,0,.6); transform:scale(.94); transition:transform .2s; }
+.overlay.show .modal { transform:scale(1); }
+.modal-ttl { font-size:14px; font-weight:800; margin-bottom:3px; }
+.modal-sub { font-size:11px; color:var(--muted); margin-bottom:14px; line-height:1.4; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.modal-opts { display:flex; flex-direction:column; gap:5px; }
+.m-opt { display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:10px; cursor:pointer; font-size:13px; font-weight:600; color:var(--text); transition:background .12s; }
+.m-opt:hover { background:var(--b2); }
+.m-av { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; color:#fff; flex-shrink:0; }
+.m-check { margin-left:auto; font-size:13px; color:#22c55e; }
+.modal-hr { border:none; border-top:1px solid var(--b2); margin:8px 0; }
+.m-opt-danger { color:#f87171; }
+.m-opt-danger:hover { background:rgba(220,38,38,.1); }
+.modal-cancel { margin-top:10px; width:100%; background:var(--b1); border:1px solid var(--b2); color:var(--muted); border-radius:9px; padding:8px; font-size:12px; font-weight:700; cursor:pointer; transition:background .13s; }
+.modal-cancel:hover { background:var(--b2); color:var(--text); }
+
+/* ══ SIDE PANEL ══ */
+.panel-wrap { position:fixed; inset:0; z-index:900; pointer-events:none; }
+.panel-wrap.show { pointer-events:auto; }
+.panel-bg { position:absolute; inset:0; background:rgba(0,0,0,.45); opacity:0; transition:opacity .25s; backdrop-filter:blur(2px); }
+.panel-wrap.show .panel-bg { opacity:1; }
+.panel { position:absolute; top:0; right:0; bottom:0; width:440px; background:#111120; border-left:1px solid var(--b2); display:flex; flex-direction:column; transform:translateX(100%); transition:transform .28s cubic-bezier(.4,0,.2,1); box-shadow:-12px 0 40px rgba(0,0,0,.4); }
+.panel-wrap.show .panel { transform:translateX(0); }
+.p-head { padding:14px 14px 11px; border-bottom:1px solid var(--b1); flex-shrink:0; }
+.p-head-top { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:9px; }
+.p-title { font-size:15px; font-weight:700; line-height:1.4; flex:1; }
+.p-close { width:26px; height:26px; border-radius:7px; background:var(--b1); border:1px solid var(--b2); color:var(--muted); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background .13s; }
+.p-close:hover { background:var(--b2); color:var(--text); }
+.p-meta { display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:9px; }
+.s-tag { font-size:10.5px; font-weight:800; padding:3px 8px; border-radius:6px; text-transform:uppercase; letter-spacing:.5px; }
+.s-todo     { background:#1e293b; color:#64748b; }
+.s-assigned { background:#451a03; color:#f59e0b; }
+.s-doing    { background:#172554; color:#60a5fa; }
+.s-done     { background:#052e16; color:#22c55e; }
+.p-acts { display:flex; gap:5px; flex-wrap:wrap; }
+.p-btn { padding:5px 11px; border-radius:7px; border:none; font-size:11.5px; font-weight:700; cursor:pointer; transition:opacity .13s,transform .1s; white-space:nowrap; }
+.p-btn:hover  { opacity:.85; }
+.p-btn:active { transform:scale(.97); }
+.p-btn:disabled { opacity:.45; cursor:not-allowed; }
+.pb-ghost { background:var(--b1); border:1px solid var(--b2); color:var(--muted); }
+.pb-ghost:hover { color:var(--text); background:var(--b2); }
+.pb-blue  { background:#2563eb; color:#fff; }
+.pb-green { background:#16a34a; color:#fff; }
+.pb-red   { background:#1e1e30; border:1px solid var(--b2); color:#f87171; }
+
+/* panel scrollable body */
+.panel-body { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+.panel-body::-webkit-scrollbar { width:3px; }
+.panel-body::-webkit-scrollbar-thumb { background:var(--b2); border-radius:2px; }
+
+/* activity */
+.act-section { padding:11px 14px; border-bottom:1px solid var(--b1); flex-shrink:0; }
+.sect-hd { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1.1px; color:var(--muted); margin-bottom:9px; }
+.act-list { display:flex; flex-direction:column; gap:6px; }
+.act-row { display:flex; align-items:flex-start; gap:8px; }
+.act-dot-col { display:flex; flex-direction:column; align-items:center; flex-shrink:0; padding-top:2px; }
+.act-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.act-line { width:1px; background:var(--b2); flex:1; margin-top:3px; min-height:8px; }
+.act-text { font-size:11.5px; color:#8892a4; line-height:1.4; }
+.act-text strong { font-weight:700; }
+.act-time { font-size:10px; color:var(--muted); margin-top:1px; }
+
+/* discussion */
+.disc-section { padding:11px 14px; flex:1; }
+.disc-list { display:flex; flex-direction:column; gap:14px; margin-top:9px; }
+.disc-empty { text-align:center; color:#2a2a44; font-size:12px; padding:18px 0; }
+.cmt { display:flex; gap:8px; animation:fadeUp2 .2s ease; }
+@keyframes fadeUp2 { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+.cmt-av { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#fff; flex-shrink:0; margin-top:1px; }
+.cmt-body { flex:1; min-width:0; }
+.cmt-hdr { display:flex; align-items:baseline; gap:6px; margin-bottom:3px; }
+.cmt-name { font-size:12px; font-weight:700; }
+.cmt-time { font-size:10px; color:var(--muted); }
+.cmt-text { font-size:12.5px; line-height:1.5; color:#b8c4d0; word-break:break-word; }
+.cmt-acts { margin-top:5px; display:flex; gap:4px; }
+.cmt-act { background:none; border:none; font-size:11px; color:var(--muted); cursor:pointer; padding:2px 6px; border-radius:5px; font-weight:600; transition:background .12s,color .12s; }
+.cmt-act:hover { background:var(--b1); color:var(--text); }
+.replies { margin-top:8px; padding-left:10px; border-left:2px solid var(--b2); display:flex; flex-direction:column; gap:9px; }
+.rply { display:flex; gap:7px; }
+.rply-av { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:800; color:#fff; flex-shrink:0; margin-top:1px; }
+.rply-body { flex:1; min-width:0; }
+.rply-hdr { display:flex; align-items:baseline; gap:5px; margin-bottom:2px; }
+.rply-name { font-size:11.5px; font-weight:700; }
+.rply-time { font-size:10px; color:var(--muted); }
+.rply-text { font-size:12px; line-height:1.45; color:#a0aab6; word-break:break-word; }
+.reply-box { display:none; margin-top:7px; padding-left:10px; border-left:2px solid var(--b2); }
+.reply-box.open { display:flex; flex-direction:column; gap:5px; }
+.rb-row { display:flex; gap:6px; }
+.rb-text { flex:1; background:var(--card); border:1px solid var(--b2); border-radius:7px; padding:5px 9px; color:var(--text); font-size:12px; outline:none; resize:none; font-family:inherit; }
+.rb-text:focus { border-color:#6366f1; }
+.rb-send { background:#4f46e5; color:#fff; border:none; border-radius:7px; padding:5px 11px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; align-self:flex-end; }
+.rb-send:hover { opacity:.85; }
+.rb-send:disabled { opacity:.45; cursor:not-allowed; }
+
+/* compose */
+.compose { padding:10px 14px; border-top:1px solid var(--b1); flex-shrink:0; display:flex; flex-direction:column; gap:7px; }
+.compose-who { display:flex; align-items:center; gap:7px; }
+.compose-lbl { font-size:11px; font-weight:600; color:var(--muted); white-space:nowrap; }
+.compose-row { display:flex; gap:7px; }
+.compose-ta { flex:1; background:var(--card); border:1px solid var(--b2); border-radius:8px; padding:8px 12px; color:var(--text); font-size:12.5px; resize:none; outline:none; min-height:38px; max-height:90px; font-family:inherit; }
+.compose-ta:focus { border-color:#6366f1; }
+.compose-ta::placeholder { color:#2a2a44; }
+.compose-send { background:linear-gradient(135deg,#4f46e5,#7c3aed); color:#fff; border:none; border-radius:8px; padding:8px 14px; font-size:12px; font-weight:700; cursor:pointer; align-self:flex-end; white-space:nowrap; }
+.compose-send:hover { opacity:.88; }
+.compose-send:disabled { opacity:.45; cursor:not-allowed; }
+</style>
+</head>
+<body>
+
+<!-- ══ IDENTITY SCREEN ══ -->
+<div class="id-screen" id="idScreen">
+  <div class="id-box">
+    <div class="id-logo">Loop</div>
+    <div class="id-eyebrow">Team Task Board</div>
+    <div class="id-q" id="idQ">Who are you?</div>
+    <div class="id-cards" id="idCards"></div>
+    <div id="idStatusWrap"></div>
+  </div>
+</div>
+
+<!-- ══ HEADER ══ -->
+<header>
+  <div>
+    <div class="hdr-brand">Loop</div>
+    <div class="hdr-sub">Team Task Board</div>
+  </div>
+  <div class="filters" id="filters"></div>
+  <div class="hdr-right">
+    <button class="hdr-refresh" id="refreshBtn">↻ Refresh</button>
+    <div class="hdr-me" id="hdrMe"></div>
+  </div>
+</header>
+
+<!-- ══ BOARD ══ -->
+<div class="board-scroll" id="boardScroll">
+  <div class="board-overlay hidden" id="boardOverlay">
+    <div class="spinner"></div>
+  </div>
+  <div class="board" id="board"></div>
+</div>
+
+<!-- ══ ADD BAR ══ -->
+<div class="add-bar">
+  <input class="add-input" id="taskInput" type="text" placeholder="New task… press Enter to add" maxlength="140"/>
+  <button class="add-btn" id="addBtn">+ Add Task</button>
+</div>
+
+<!-- ══ ASSIGN MODAL ══ -->
+<div class="overlay" id="assignOverlay">
+  <div class="modal">
+    <div class="modal-ttl">Assign to</div>
+    <div class="modal-sub" id="mSub"></div>
+    <div class="modal-opts" id="mOpts"></div>
+    <button class="modal-cancel" id="mCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- ══ SIDE PANEL ══ -->
+<div class="panel-wrap" id="panelWrap">
+  <div class="panel-bg" id="panelBg"></div>
+  <div class="panel">
+    <div class="p-head"    id="pHead"></div>
+    <div class="panel-body" id="panelBody"></div>
+    <div class="compose"   id="compose"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ══════════════════════════════════════════════════
+   CONFIG  ← Change API_BASE to your Render URL
+══════════════════════════════════════════════════ */
+const API_BASE = 'https://loop-board-api.onrender.com';
+/*
+  After deploying backend to Render, replace the URL above.
+  Example: const API_BASE = 'https://my-loop-app.onrender.com';
+  For local dev:  const API_BASE = 'http://localhost:3001';
+*/
+
+/* ══════════════════════════════════════════════════
+   CONSTANTS
+══════════════════════════════════════════════════ */
+const MEMBERS = [
+  { id:'sagar',    name:'Sagar',    init:'S', color:'#3b82f6' },
+  { id:'varad',    name:'Varad',    init:'V', color:'#a855f7' },
+  { id:'leonardo', name:'Leonardo', init:'L', color:'#10b981' },
+];
+const MEMBER_IDS = new Set(MEMBERS.map(m => m.id));
+
+const COLS = [
+  { id:'todo',     label:'To Do',     cls:'c-todo'  },
+  { id:'assigned', label:'Assigned',  cls:'c-asgn'  },
+  { id:'doing',    label:'Doing',     cls:'c-doing' },
+  { id:'done',     label:'Completed', cls:'c-done'  },
+];
+const NEXT_STATUS  = { todo:'doing', assigned:'doing', doing:'done' };
+const NEXT_LABEL   = { todo:'▶ Start', assigned:'▶ Start', doing:'✓ Complete' };
+const STATUS_LABEL = { todo:'To Do', assigned:'Assigned', doing:'Doing', done:'Completed' };
+
+/* ══════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════ */
+let tasks   = [];
+let me      = null;
+let filter  = 'all';
+let panelId = null;
+let asnId   = null;
+
+/* ══════════════════════════════════════════════════
+   API LAYER
+══════════════════════════════════════════════════ */
+async function apiFetch(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API_BASE + path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!data.ok) throw new Error(data.error || `Server error ${res.status}`);
+  return data;
+}
+
+/* Retry up to 3 times with increasing delay (handles Render cold-starts) */
+async function apiWithRetry(method, path, body, tries = 3) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await apiFetch(method, path, body);
+    } catch(e) {
+      const isLast = i === tries - 1;
+      if (isLast || !e.message.toLowerCase().includes('failed to fetch')) throw e;
+      await sleep(3000 + i * 2000);
+    }
+  }
+}
+
+const API = {
+  getTasks:       ()              => apiWithRetry('GET',    '/api/tasks'),
+  createTask:     (title, by)     => apiWithRetry('POST',   '/api/tasks',                  { title, by }),
+  assignTask:     (id, assignee, by) => apiWithRetry('PATCH', `/api/tasks/${id}/assign`,   { assignee, by }),
+  moveTask:       (id, status, by)   => apiWithRetry('PATCH', `/api/tasks/${id}/status`,   { status, by }),
+  deleteTask:     (id)               => apiWithRetry('DELETE',`/api/tasks/${id}`),
+  addComment:     (id, text, author) => apiWithRetry('POST',  `/api/tasks/${id}/comments`, { text, author }),
+  addReply:       (id, cid, text, author) =>
+    apiWithRetry('POST', `/api/tasks/${id}/comments/${cid}/replies`, { text, author }),
+};
+
+/* ══════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════ */
+const sleep  = ms => new Promise(r => setTimeout(r, ms));
+const member = id => MEMBERS.find(m => m.id === id);
+const byId   = id => tasks.find(t => t.id === id);
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function timeAgo(ts) {
+  const d = Date.now() - new Date(ts).getTime();
+  if (d < 60000)     return 'just now';
+  if (d < 3600000)   return Math.floor(d / 60000) + 'm ago';
+  if (d < 86400000)  return Math.floor(d / 3600000) + 'h ago';
+  if (d < 604800000) return Math.floor(d / 86400000) + 'd ago';
+  return new Date(ts).toLocaleDateString();
+}
+function actText(a) {
+  const byM   = a.by ? member(a.by) : null;
+  const byStr = byM
+    ? `<strong style="color:${byM.color}">${byM.name}</strong>`
+    : '<strong>Someone</strong>';
+  switch (a.type) {
+    case 'created':   return `${byStr} created this task`;
+    case 'assigned': {
+      const toM = a.meta?.to ? member(a.meta.to) : null;
+      return toM
+        ? `${byStr} assigned to <strong style="color:${toM.color}">${toM.name}</strong>`
+        : `${byStr} assigned task`;
+    }
+    case 'unassigned': return `${byStr} removed the assignee`;
+    case 'status': {
+      const lbl = STATUS_LABEL[a.meta?.to] || a.meta?.to || '?';
+      return `${byStr} moved to <strong>${lbl}</strong>`;
+    }
+    case 'commented': return `${byStr} left a comment`;
+    case 'replied':   return `${byStr} replied to a comment`;
+    default:          return `${byStr} made a change`;
+  }
+}
+
+function toast(msg, type = 'error') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function setBoardLoading(on) {
+  document.getElementById('boardOverlay').classList.toggle('hidden', !on);
+}
+
+function updateTaskInState(updated) {
+  const i = tasks.findIndex(t => t.id === updated.id);
+  if (i >= 0) tasks[i] = updated; else tasks.push(updated);
+}
+
+/* ══════════════════════════════════════════════════
+   SESSION  (sessionStorage — cleared on tab close)
+══════════════════════════════════════════════════ */
+const SESSION = {
+  KEY: 'loop_session',
+  get() {
+    try { return JSON.parse(sessionStorage.getItem(this.KEY)); } catch { return null; }
+  },
+  set(id) { sessionStorage.setItem(this.KEY, JSON.stringify({ me: id, at: Date.now() })); },
+};
+
+/* ══════════════════════════════════════════════════
+   LOAD TASKS
+══════════════════════════════════════════════════ */
+async function loadTasks(silent = false) {
+  if (!silent) setBoardLoading(true);
+  try {
+    const { tasks: fetched } = await API.getTasks();
+    tasks = fetched;
+    renderBoard();
+    if (panelId) {
+      const t = byId(panelId);
+      if (t) renderPanelBody(t);
+    }
+  } catch(e) {
+    toast('Could not load tasks: ' + e.message);
+  } finally {
+    if (!silent) setBoardLoading(false);
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   IDENTITY SCREEN
+══════════════════════════════════════════════════ */
+function buildIdScreen() {
+  document.getElementById('idCards').innerHTML = MEMBERS.map(m => `
+    <div class="id-card" data-who="${m.id}"
+      onmouseover="this.style.borderColor='${m.color}';this.style.background='${m.color}14'"
+      onmouseout="this.style.borderColor='';this.style.background=''">
+      <div class="id-av" style="background:${m.color};box-shadow:0 4px 18px ${m.color}55">${m.init}</div>
+      <div class="id-name" style="color:${m.color}">${m.name}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('idCards').addEventListener('click', e => {
+    const card = e.target.closest('[data-who]');
+    if (card) pickIdentity(card.dataset.who);
+  });
+}
+
+async function pickIdentity(id) {
+  me = id;
+  SESSION.set(id);
+
+  // Show connecting state
+  document.getElementById('idCards').style.opacity = '0.3';
+  document.getElementById('idCards').style.pointerEvents = 'none';
+  document.getElementById('idQ').textContent = 'Connecting…';
+  document.getElementById('idStatusWrap').innerHTML = `
+    <div class="id-status">
+      <div class="spinner"></div>
+      <span>Waking up server — may take ~30s on first load</span>
+    </div>
+  `;
+
+  try {
+    const { tasks: fetched } = await apiWithRetry('GET', '/api/tasks', null, 4);
+    tasks = fetched;
+  } catch(e) {
+    document.getElementById('idQ').textContent = 'Could not connect';
+    document.getElementById('idStatusWrap').innerHTML = `
+      <div class="id-error">${esc(e.message)}</div>
+      <button class="retry-btn" onclick="location.reload()">Try Again</button>
+    `;
+    return;
+  }
+
+  const screen = document.getElementById('idScreen');
+  screen.classList.add('out');
+  screen.addEventListener('transitionend', () => screen.remove(), { once: true });
+  renderHeaderMe();
+  renderFilters();
+  renderBoard();
+}
+
+function renderHeaderMe() {
+  const m = member(me); if (!m) return;
+  const el = document.getElementById('hdrMe');
+  el.innerHTML = `<div class="hdr-me-av" style="background:${m.color}">${m.init}</div><span>${m.name}</span>`;
+  el.style.cssText = `background:${m.color}20;color:${m.color};border:1.5px solid ${m.color}40`;
+}
+
+/* ══════════════════════════════════════════════════
+   FILTER BAR
+══════════════════════════════════════════════════ */
+function renderFilters() {
+  const items = [
+    { id:'all', label:'All Tasks', dot:'#6366f1' },
+    ...MEMBERS.map(m => ({ id:m.id, label:m.name, dot:m.color })),
+  ];
+  document.getElementById('filters').innerHTML = items.map(f => `
+    <button class="fil ${filter===f.id?'active':''}" data-f="${f.id}"
+      style="${filter===f.id?`border-color:${f.dot}66;background:${f.dot}1a;color:${f.dot}`:''}">
+      <span class="fil-dot" style="background:${f.dot}"></span>${f.label}
+    </button>
+  `).join('');
+}
+document.getElementById('filters').addEventListener('click', e => {
+  const b = e.target.closest('[data-f]'); if (!b) return;
+  filter = b.dataset.f; renderFilters(); renderBoard();
+});
+
+/* ══════════════════════════════════════════════════
+   BOARD
+══════════════════════════════════════════════════ */
+function renderBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  COLS.forEach(col => {
+    let ct = tasks.filter(t => t.status === col.id);
+    if (filter !== 'all') ct = ct.filter(t => t.assignee === filter);
+
+    const el = document.createElement('div');
+    el.className = `col ${col.cls}`;
+    el.innerHTML = `
+      <div class="col-head">
+        <span class="col-label">${col.label}</span>
+        <span class="col-n">${ct.length}</span>
+      </div>
+      <div class="col-body" id="cb-${col.id}"></div>
+    `;
+    board.appendChild(el);
+
+    const body = el.querySelector(`#cb-${col.id}`);
+    if (!ct.length) {
+      body.innerHTML = '<div class="col-empty">No tasks here</div>';
+    } else {
+      ct.forEach(t => body.appendChild(buildCard(t)));
+    }
+  });
+}
+
+function buildCard(task) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const m = task.assignee ? member(task.assignee) : null;
+  const totalComments = (task.comments||[])
+    .reduce((a,c) => a + 1 + (c.replies?.length||0), 0);
+
+  card.innerHTML = `
+    <div class="card-title">${esc(task.title)}</div>
+    <div class="card-bottom">
+      ${m
+        ? `<span class="chip" style="background:${m.color}15;color:${m.color};border:1px solid ${m.color}30">
+             <span class="chip-dot" style="background:${m.color}"></span>${m.name}
+           </span>`
+        : `<span style="font-size:11px;color:#333355">Unassigned</span>`}
+      <div class="card-right">
+        ${totalComments ? `<span class="cc-badge">💬 ${totalComments}</span>` : ''}
+        <button class="btn-sm assign-btn">👤 ${task.assignee ? 'Reassign' : 'Assign'}</button>
+      </div>
+    </div>
+  `;
+  card.querySelector('.assign-btn').addEventListener('click', e => {
+    e.stopPropagation(); openAssign(task.id);
+  });
+  card.addEventListener('click', () => openPanel(task.id));
+  return card;
+}
+
+/* ══════════════════════════════════════════════════
+   ASSIGN MODAL
+══════════════════════════════════════════════════ */
+function openAssign(taskId) {
+  asnId = taskId;
+  const task = byId(taskId);
+  document.getElementById('mSub').textContent = task.title;
+  document.getElementById('mOpts').innerHTML =
+    MEMBERS.map(m => `
+      <div class="m-opt" data-pick="${m.id}">
+        <div class="m-av" style="background:${m.color}">${m.init}</div>
+        <span style="color:${m.color};font-weight:700">${m.name}</span>
+        ${task.assignee === m.id ? '<span class="m-check">✓</span>' : ''}
+      </div>
+    `).join('')
+    + (task.assignee ? `
+      <hr class="modal-hr"/>
+      <div class="m-opt m-opt-danger" data-pick="__none__">
+        <div class="m-av" style="background:#dc2626">✕</div>Unassign
+      </div>` : '');
+  document.getElementById('assignOverlay').classList.add('show');
+}
+
+document.getElementById('mOpts').addEventListener('click', async e => {
+  const opt = e.target.closest('[data-pick]'); if (!opt) return;
+  const pick = opt.dataset.pick === '__none__' ? null : opt.dataset.pick;
+  try {
+    setBoardLoading(true);
+    const { task } = await API.assignTask(asnId, pick, me);
+    updateTaskInState(task);
+    closeAssign(); renderBoard();
+    if (panelId === asnId) { renderPanelHead(task); renderPanelBody(task); }
+  } catch(e) { toast(e.message); }
+  finally    { setBoardLoading(false); }
+});
+
+document.getElementById('mCancel').addEventListener('click', closeAssign);
+document.getElementById('assignOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('assignOverlay')) closeAssign();
+});
+function closeAssign() {
+  document.getElementById('assignOverlay').classList.remove('show'); asnId = null;
+}
+
+/* ══════════════════════════════════════════════════
+   SIDE PANEL
+══════════════════════════════════════════════════ */
+function openPanel(id)  { panelId = id; renderPanel(); document.getElementById('panelWrap').classList.add('show'); }
+function closePanel()   { document.getElementById('panelWrap').classList.remove('show'); panelId = null; }
+document.getElementById('panelBg').addEventListener('click', closePanel);
+
+function renderPanel() {
+  const task = byId(panelId); if (!task) return;
+  renderPanelHead(task);
+  renderPanelBody(task);
+  renderCompose();
+}
+
+function renderPanelHead(task) {
+  const m  = task.assignee ? member(task.assignee) : null;
+  const ns = NEXT_STATUS[task.status];
+  document.getElementById('pHead').innerHTML = `
+    <div class="p-head-top">
+      <div class="p-title">${esc(task.title)}</div>
+      <button class="p-close" id="pClose">✕</button>
+    </div>
+    <div class="p-meta">
+      <span class="s-tag s-${task.status === 'done' ? 'done' : task.status}">
+        ${STATUS_LABEL[task.status]}
+      </span>
+      ${m
+        ? `<span class="chip" style="background:${m.color}15;color:${m.color};border:1px solid ${m.color}30">
+             <span class="chip-dot" style="background:${m.color}"></span>${m.name}
+           </span>`
+        : `<span style="font-size:11px;color:#333355">Unassigned</span>`}
+    </div>
+    <div class="p-acts">
+      <button class="p-btn pb-ghost" id="pAssign">👤 ${task.assignee ? 'Reassign' : 'Assign to'}</button>
+      ${ns ? `<button class="p-btn ${ns==='done'?'pb-green':'pb-blue'}" id="pNext">${NEXT_LABEL[task.status]}</button>` : ''}
+      ${task.status === 'done' ? `<button class="p-btn pb-ghost" id="pReopen">↩ Reopen</button>` : ''}
+      <button class="p-btn pb-red" id="pDel" style="margin-left:auto">Delete</button>
+    </div>
+  `;
+
+  document.getElementById('pClose').onclick  = closePanel;
+  document.getElementById('pAssign').onclick = () => openAssign(panelId);
+
+  document.getElementById('pNext')?.addEventListener('click', async function() {
+    this.disabled = true;
+    try {
+      const { task: updated } = await API.moveTask(panelId, ns, me);
+      updateTaskInState(updated); renderBoard(); renderPanelHead(updated); renderPanelBody(updated);
+    } catch(e) { toast(e.message); this.disabled = false; }
+  });
+
+  document.getElementById('pReopen')?.addEventListener('click', async function() {
+    this.disabled = true;
+    try {
+      const { task: updated } = await API.moveTask(panelId, 'todo', me);
+      updateTaskInState(updated); renderBoard(); renderPanelHead(updated); renderPanelBody(updated);
+    } catch(e) { toast(e.message); this.disabled = false; }
+  });
+
+  document.getElementById('pDel').addEventListener('click', async function() {
+    if (!confirm('Delete this task?')) return;
+    this.disabled = true;
+    try {
+      await API.deleteTask(panelId);
+      tasks = tasks.filter(t => t.id !== panelId);
+      closePanel(); renderBoard();
+    } catch(e) { toast(e.message); this.disabled = false; }
+  });
+}
+
+function renderPanelBody(task) {
+  const body = document.getElementById('panelBody');
+  body.innerHTML = '';
+
+  /* Activity */
+  const actEl = document.createElement('div');
+  actEl.className = 'act-section';
+  const acts = [...(task.activity || [])].reverse();
+  actEl.innerHTML = `
+    <div class="sect-hd">Activity</div>
+    <div class="act-list">
+      ${!acts.length
+        ? '<div style="font-size:11px;color:#2a2a44">No activity yet.</div>'
+        : acts.map((a, i) => {
+            const m = a.by ? member(a.by) : null;
+            const dot = m ? m.color : '#3a3a5a';
+            return `<div class="act-row">
+              <div class="act-dot-col">
+                <div class="act-dot" style="background:${dot}"></div>
+                ${i < acts.length - 1 ? '<div class="act-line"></div>' : ''}
+              </div>
+              <div>
+                <div class="act-text">${actText(a)}</div>
+                <div class="act-time">${timeAgo(a.at)}</div>
+              </div>
+            </div>`;
+          }).join('')}
+    </div>
+  `;
+  body.appendChild(actEl);
+
+  /* Discussion */
+  const discEl = document.createElement('div');
+  discEl.className = 'disc-section';
+  discEl.innerHTML = '<div class="sect-hd">Discussion</div><div class="disc-list" id="discList"></div>';
+  body.appendChild(discEl);
+
+  const list = discEl.querySelector('#discList');
+  const cmts = task.comments || [];
+  if (!cmts.length) {
+    list.innerHTML = '<div class="disc-empty">No messages yet — ask something below.</div>';
+  } else {
+    cmts.forEach(c => list.appendChild(buildCmt(c)));
+  }
+
+  requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
+}
+
+function buildCmt(c) {
+  const m = member(c.author); if (!m) return document.createTextNode('');
+  const wrap = document.createElement('div');
+  wrap.className = 'cmt';
+
+  const repliesHtml = (c.replies||[]).map(r => {
+    const rm = member(r.author); if (!rm) return '';
+    return `<div class="rply">
+      <div class="rply-av" style="background:${rm.color}">${rm.init}</div>
+      <div class="rply-body">
+        <div class="rply-hdr">
+          <span class="rply-name" style="color:${rm.color}">${rm.name}</span>
+          <span class="rply-time">${timeAgo(r.createdAt)}</span>
+        </div>
+        <div class="rply-text">${esc(r.text)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="cmt-av" style="background:${m.color}">${m.init}</div>
+    <div class="cmt-body">
+      <div class="cmt-hdr">
+        <span class="cmt-name" style="color:${m.color}">${m.name}</span>
+        <span class="cmt-time">${timeAgo(c.createdAt)}</span>
+      </div>
+      <div class="cmt-text">${esc(c.text)}</div>
+      <div class="cmt-acts">
+        <button class="cmt-act reply-toggle">↩ Reply</button>
+      </div>
+      ${repliesHtml ? `<div class="replies">${repliesHtml}</div>` : ''}
+      <div class="reply-box" id="rb-${c.id}">
+        <div class="rb-row">
+          <textarea class="rb-text" id="rbt-${c.id}" placeholder="Write a reply…" rows="1"></textarea>
+          <button class="rb-send" data-cid="${c.id}">Send</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  wrap.querySelector('.reply-toggle').addEventListener('click', () => {
+    const rb = document.getElementById(`rb-${c.id}`);
+    rb.classList.toggle('open');
+    if (rb.classList.contains('open')) document.getElementById(`rbt-${c.id}`).focus();
+  });
+
+  wrap.querySelector('.rb-send').addEventListener('click', async function() {
+    const text = document.getElementById(`rbt-${c.id}`).value.trim();
+    if (!text) return;
+    this.disabled = true;
+    try {
+      const { task: updated } = await API.addReply(panelId, c.id, text, me);
+      updateTaskInState(updated);
+      renderPanelBody(updated);
+    } catch(e) { toast(e.message); this.disabled = false; }
+  });
+
+  return wrap;
+}
+
+function renderCompose() {
+  const m    = member(me);
+  const area = document.getElementById('compose');
+  area.innerHTML = `
+    <div class="compose-who">
+      <span class="compose-lbl">Posting as:</span>
+      <span class="chip" style="background:${m.color}18;color:${m.color};border:1px solid ${m.color}35">
+        <span class="chip-dot" style="background:${m.color}"></span>${m.name}
+      </span>
+    </div>
+    <div class="compose-row">
+      <textarea class="compose-ta" id="cText"
+        placeholder="Ask a question or leave a note… (Enter to send)" rows="2"></textarea>
+      <button class="compose-send" id="cSend">Send</button>
+    </div>
+  `;
+  document.getElementById('cSend').addEventListener('click', sendComment);
+  document.getElementById('cText').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendComment(); }
+  });
+}
+
+async function sendComment() {
+  const btn  = document.getElementById('cSend');
+  const text = document.getElementById('cText').value.trim();
+  if (!text) { document.getElementById('cText').focus(); return; }
+  btn.disabled = true;
+  try {
+    const { task: updated } = await API.addComment(panelId, text, me);
+    updateTaskInState(updated);
+    document.getElementById('cText').value = '';
+    renderPanelBody(updated);
+    renderBoard();
+    renderCompose();
+  } catch(e) { toast(e.message); }
+  finally    { btn.disabled = false; }
+}
+
+/* ══════════════════════════════════════════════════
+   ADD TASK
+══════════════════════════════════════════════════ */
+async function addTask() {
+  const inp   = document.getElementById('taskInput');
+  const btn   = document.getElementById('addBtn');
+  const title = inp.value.trim();
+  if (!title) { inp.focus(); return; }
+
+  btn.disabled = true;
+  try {
+    const { task } = await API.createTask(title, me);
+    tasks.push(task);
+    inp.value = '';
+    renderBoard();
+    inp.focus();
+    toast('Task added', 'success');
+  } catch(e) { toast(e.message); }
+  finally    { btn.disabled = false; }
+}
+document.getElementById('addBtn').addEventListener('click', addTask);
+document.getElementById('taskInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addTask();
+});
+
+/* ══════════════════════════════════════════════════
+   REFRESH
+══════════════════════════════════════════════════ */
+document.getElementById('refreshBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true; btn.textContent = '↻ Refreshing…';
+  await loadTasks();
+  btn.disabled = false; btn.textContent = '↻ Refresh';
+  toast('Board refreshed', 'success');
+});
+
+// Silent refresh when tab becomes visible
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && me) loadTasks(true);
+});
+
+/* ══════════════════════════════════════════════════
+   BOOT
+══════════════════════════════════════════════════ */
+buildIdScreen();
+
+const sess = SESSION.get();
+if (sess && MEMBER_IDS.has(sess.me)) {
+  me = sess.me;
+  document.getElementById('idScreen').remove();
+  renderHeaderMe();
+  loadTasks().then(() => { renderFilters(); });
+}
+// else: identity screen visible → app boots inside pickIdentity()
+</script>
+</body>
+</html>
