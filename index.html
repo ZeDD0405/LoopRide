@@ -72,8 +72,34 @@ header { background:linear-gradient(135deg,#3730a3,#6d28d9 55%,#7c3aed); padding
 .col-empty { text-align:center; color:var(--b3); font-size:12px; padding:22px 0; user-select:none; }
 
 /* ══ CARD ══ */
-.card { background:var(--card); border:1px solid var(--b2); border-radius:10px; padding:11px 12px; cursor:pointer; transition:transform .15s,box-shadow .15s,border-color .15s; }
+.card { background:var(--card); border:1px solid var(--b2); border-radius:10px; padding:11px 12px; cursor:pointer; transition:transform .15s,box-shadow .15s,border-color .15s; position:relative; }
 .card:hover { transform:translateY(-2px); box-shadow:0 6px 22px rgba(0,0,0,.35); border-color:var(--b3); }
+
+/* ══ UNREAD DOT ══ */
+.unread-dot {
+  position:absolute; top:9px; right:9px;
+  width:9px; height:9px; border-radius:50%;
+  background:#f59e0b;
+  border:2px solid var(--card);
+  box-shadow:0 0 0 0 rgba(245,158,11,.55);
+  animation:unread-pulse 1.8s ease-in-out infinite;
+  z-index:1;
+}
+@keyframes unread-pulse {
+  0%,100% { box-shadow:0 0 0 0 rgba(245,158,11,.55); }
+  55%     { box-shadow:0 0 0 5px rgba(245,158,11,0); }
+}
+.unread-count {
+  position:absolute; top:6px; right:6px;
+  min-width:17px; height:17px; border-radius:9px;
+  background:#f59e0b; color:#0d0d1a;
+  font-size:9.5px; font-weight:900;
+  display:flex; align-items:center; justify-content:center;
+  padding:0 4px;
+  border:2px solid var(--card);
+  animation:unread-pulse 1.8s ease-in-out infinite;
+  z-index:1;
+}
 .card-title { font-size:13px; font-weight:600; line-height:1.45; color:var(--text); margin-bottom:9px; }
 .card-bottom { display:flex; align-items:center; justify-content:space-between; gap:6px; }
 .chip { display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border-radius:8px; font-size:11px; font-weight:700; }
@@ -404,6 +430,51 @@ function updateTaskInState(updated) {
 }
 
 /* ══════════════════════════════════════════════════
+   READ TRACKER  (localStorage — persists across sessions)
+   Tracks which comment/reply IDs each user has seen.
+   Shape: { sagar: Set<id>, varad: Set<id>, leonardo: Set<id> }
+══════════════════════════════════════════════════ */
+const ReadTracker = {
+  KEY: 'loop_read',
+
+  _load() {
+    try { return JSON.parse(localStorage.getItem(this.KEY)) || {}; } catch { return {}; }
+  },
+  _save(data) { localStorage.setItem(this.KEY, JSON.stringify(data)); },
+
+  /* Set of IDs already seen by userId */
+  readSet(userId) {
+    return new Set(this._load()[userId] || []);
+  },
+
+  /* Mark every comment + reply in task as read for userId */
+  markRead(task, userId) {
+    const data = this._load();
+    const seen = new Set(data[userId] || []);
+    (task.comments || []).forEach(c => {
+      seen.add(c.id);
+      (c.replies || []).forEach(r => seen.add(r.id));
+    });
+    data[userId] = [...seen];
+    this._save(data);
+  },
+
+  /* Count messages NOT authored by userId AND not yet seen */
+  countUnread(task, userId) {
+    if (!task.comments?.length) return 0;
+    const seen = this.readSet(userId);
+    let n = 0;
+    (task.comments || []).forEach(c => {
+      if (c.author !== userId && !seen.has(c.id)) n++;
+      (c.replies || []).forEach(r => {
+        if (r.author !== userId && !seen.has(r.id)) n++;
+      });
+    });
+    return n;
+  },
+};
+
+/* ══════════════════════════════════════════════════
    SESSION  (sessionStorage — cleared on tab close)
 ══════════════════════════════════════════════════ */
 const SESSION = {
@@ -551,8 +622,10 @@ function buildCard(task) {
   const m = task.assignee ? member(task.assignee) : null;
   const totalComments = (task.comments||[])
     .reduce((a,c) => a + 1 + (c.replies?.length||0), 0);
+  const unread = me ? ReadTracker.countUnread(task, me) : 0;
 
   card.innerHTML = `
+    ${unread > 0 ? `<div class="unread-count" title="${unread} unread message${unread>1?'s':''}">${unread > 9 ? '9+' : unread}</div>` : ''}
     <div class="card-title">${esc(task.title)}</div>
     <div class="card-bottom">
       ${m
@@ -620,7 +693,13 @@ function closeAssign() {
 /* ══════════════════════════════════════════════════
    SIDE PANEL
 ══════════════════════════════════════════════════ */
-function openPanel(id)  { panelId = id; renderPanel(); document.getElementById('panelWrap').classList.add('show'); }
+function openPanel(id) {
+  panelId = id;
+  const task = byId(id);
+  if (task && me) { ReadTracker.markRead(task, me); renderBoard(); }
+  renderPanel();
+  document.getElementById('panelWrap').classList.add('show');
+}
 function closePanel()   { document.getElementById('panelWrap').classList.remove('show'); panelId = null; }
 document.getElementById('panelBg').addEventListener('click', closePanel);
 
@@ -788,7 +867,9 @@ function buildCmt(c) {
     try {
       const { task: updated } = await API.addReply(panelId, c.id, text, me);
       updateTaskInState(updated);
+      ReadTracker.markRead(updated, me);
       renderPanelBody(updated);
+      renderBoard();
     } catch(e) { toast(e.message); this.disabled = false; }
   });
 
@@ -825,6 +906,7 @@ async function sendComment() {
   try {
     const { task: updated } = await API.addComment(panelId, text, me);
     updateTaskInState(updated);
+    ReadTracker.markRead(updated, me);
     document.getElementById('cText').value = '';
     renderPanelBody(updated);
     renderBoard();
