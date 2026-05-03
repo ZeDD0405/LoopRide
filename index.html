@@ -72,8 +72,19 @@ header { background:linear-gradient(135deg,#3730a3,#6d28d9 55%,#7c3aed); padding
 .col-empty { text-align:center; color:var(--b3); font-size:12px; padding:22px 0; user-select:none; }
 
 /* ══ CARD ══ */
-.card { background:var(--card); border:1px solid var(--b2); border-radius:10px; padding:11px 12px; cursor:pointer; transition:transform .15s,box-shadow .15s,border-color .15s; position:relative; }
+.card { background:var(--card); border:1px solid var(--b2); border-radius:10px; padding:11px 12px; cursor:pointer; transition:transform .15s,box-shadow .15s,border-color .15s; position:relative; overflow:hidden; }
 .card:hover { transform:translateY(-2px); box-shadow:0 6px 22px rgba(0,0,0,.35); border-color:var(--b3); }
+.card-del-btn { position:absolute; top:7px; right:7px; width:22px; height:22px; border-radius:6px; border:none; background:transparent; color:var(--b3); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .13s,color .13s; z-index:2; line-height:1; }
+.card-del-btn:hover { background:rgba(220,38,38,.15); color:#ef4444; }
+.card-del-confirm { position:absolute; inset:0; background:var(--card); border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; z-index:10; opacity:0; pointer-events:none; transition:opacity .18s; }
+.card-del-confirm.show { opacity:1; pointer-events:all; }
+.card-del-confirm p { font-size:12.5px; font-weight:600; color:var(--text); margin:0; }
+.card-del-confirm-btns { display:flex; gap:8px; }
+.card-del-confirm-btns button { padding:5px 14px; border-radius:7px; border:none; font-size:12px; font-weight:700; cursor:pointer; transition:opacity .13s; }
+.cdc-yes { background:#dc2626; color:#fff; }
+.cdc-yes:hover { opacity:.85; }
+.cdc-no  { background:var(--b2); color:var(--text); }
+.cdc-no:hover  { background:var(--b3); }
 
 /* ══ UNREAD DOT ══ */
 .unread-dot {
@@ -626,6 +637,14 @@ function buildCard(task) {
 
   card.innerHTML = `
     ${unread > 0 ? `<div class="unread-count" title="${unread} unread message${unread>1?'s':''}">${unread > 9 ? '9+' : unread}</div>` : ''}
+    <button class="card-del-btn" title="Delete task">🗑</button>
+    <div class="card-del-confirm">
+      <p>Delete this task?</p>
+      <div class="card-del-confirm-btns">
+        <button class="cdc-yes">Delete</button>
+        <button class="cdc-no">Cancel</button>
+      </div>
+    </div>
     <div class="card-title">${esc(task.title)}</div>
     <div class="card-bottom">
       ${m
@@ -639,6 +658,34 @@ function buildCard(task) {
       </div>
     </div>
   `;
+
+  const confirm = card.querySelector('.card-del-confirm');
+
+  card.querySelector('.card-del-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    confirm.classList.add('show');
+  });
+
+  card.querySelector('.cdc-no').addEventListener('click', e => {
+    e.stopPropagation();
+    confirm.classList.remove('show');
+  });
+
+  card.querySelector('.cdc-yes').addEventListener('click', async e => {
+    e.stopPropagation();
+    card.style.opacity = '0.5';
+    card.style.pointerEvents = 'none';
+    try {
+      await API.deleteTask(task.id);
+      tasks = tasks.filter(t => t.id !== task.id);
+      renderBoard();
+    } catch(err) {
+      card.style.opacity = '';
+      card.style.pointerEvents = '';
+      confirm.classList.remove('show');
+    }
+  });
+
   card.querySelector('.assign-btn').addEventListener('click', e => {
     e.stopPropagation(); openAssign(task.id);
   });
@@ -732,7 +779,12 @@ function renderPanelHead(task) {
       <button class="p-btn pb-ghost" id="pAssign">👤 ${task.assignee ? 'Reassign' : 'Assign to'}</button>
       ${ns ? `<button class="p-btn ${ns==='done'?'pb-green':'pb-blue'}" id="pNext">${NEXT_LABEL[task.status]}</button>` : ''}
       ${task.status === 'done' ? `<button class="p-btn pb-ghost" id="pReopen">↩ Reopen</button>` : ''}
-      <button class="p-btn pb-red" id="pDel" style="margin-left:auto">Delete</button>
+      <button class="p-btn pb-red" id="pDel" style="margin-left:auto">🗑 Delete</button>
+    </div>
+    <div id="pDelConfirm" style="display:none;align-items:center;justify-content:center;gap:10px;padding:10px 16px;background:#1a0a0a;border-top:1px solid #3a1a1a;">
+      <span style="font-size:12.5px;font-weight:600;color:#f87171;">Delete this task permanently?</span>
+      <button class="p-btn pb-red" id="pDelYes" style="padding:5px 14px">Delete</button>
+      <button class="p-btn pb-ghost" id="pDelNo" style="padding:5px 14px">Cancel</button>
     </div>
   `;
 
@@ -755,14 +807,24 @@ function renderPanelHead(task) {
     } catch(e) { toast(e.message); this.disabled = false; }
   });
 
-  document.getElementById('pDel').addEventListener('click', async function() {
-    if (!confirm('Delete this task?')) return;
+  document.getElementById('pDel').addEventListener('click', function() {
+    const bar = document.getElementById('pDelConfirm');
+    bar.style.display = 'flex';
+    this.style.display = 'none';
+  });
+
+  document.getElementById('pDelNo').addEventListener('click', function() {
+    document.getElementById('pDelConfirm').style.display = 'none';
+    document.getElementById('pDel').style.display = '';
+  });
+
+  document.getElementById('pDelYes').addEventListener('click', async function() {
     this.disabled = true;
     try {
       await API.deleteTask(panelId);
       tasks = tasks.filter(t => t.id !== panelId);
       closePanel(); renderBoard();
-    } catch(e) { toast(e.message); this.disabled = false; }
+    } catch(e) { this.disabled = false; }
   });
 }
 
