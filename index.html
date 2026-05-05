@@ -646,7 +646,6 @@ function buildCard(task) {
     </div>
     <div class="card-title">${esc(task.title)}</div>
     <div class="card-bottom">
-      <button class="card-del-btn" title="Delete task">🗑</button>
       ${m
         ? `<span class="chip" style="background:${m.color}15;color:${m.color};border:1px solid ${m.color}30">
              <span class="chip-dot" style="background:${m.color}"></span>${m.name}
@@ -655,6 +654,11 @@ function buildCard(task) {
       <div class="card-right">
         ${totalComments ? `<span class="cc-badge">💬 ${totalComments}</span>` : ''}
         <button class="btn-sm assign-btn">👤 ${task.assignee ? 'Reassign' : 'Assign'}</button>
+        <button class="card-del-btn" title="Delete task">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          </svg>
+        </button>
       </div>
     </div>
   `;
@@ -779,7 +783,7 @@ function renderPanelHead(task) {
       <button class="p-btn pb-ghost" id="pAssign">👤 ${task.assignee ? 'Reassign' : 'Assign to'}</button>
       ${ns ? `<button class="p-btn ${ns==='done'?'pb-green':'pb-blue'}" id="pNext">${NEXT_LABEL[task.status]}</button>` : ''}
       ${task.status === 'done' ? `<button class="p-btn pb-ghost" id="pReopen">↩ Reopen</button>` : ''}
-      <button class="p-btn pb-red" id="pDel" style="margin-left:auto">🗑 Delete</button>
+      <button class="p-btn pb-red" id="pDel" style="margin-left:auto;display:flex;align-items:center;gap:6px"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete</button>
     </div>
     <div id="pDelConfirm" style="display:none;align-items:center;justify-content:center;gap:10px;padding:10px 16px;background:#1a0a0a;border-top:1px solid #3a1a1a;">
       <span style="font-size:12.5px;font-weight:600;color:#f87171;">Delete this task permanently?</span>
