@@ -90,6 +90,9 @@ header { background:linear-gradient(135deg,#3730a3,#6d28d9 55%,#7c3aed); padding
 .col-body::-webkit-scrollbar { width:3px; }
 .col-body::-webkit-scrollbar-thumb { background:var(--b3); border-radius:2px; }
 .col-empty { text-align:center; color:var(--b3); font-size:12px; padding:22px 0; user-select:none; }
+.col-body.drag-over { background:rgba(129,140,248,.07); outline:2px dashed rgba(129,140,248,.4); outline-offset:-4px; border-radius:8px; }
+.card.dragging { opacity:.35; transform:scale(.97); box-shadow:none; cursor:grabbing; }
+.card[draggable="true"] { cursor:grab; }
 
 /* ══ CARD ══ */
 .card { background:var(--card); border:1px solid var(--b2); border-radius:10px; padding:11px 12px; cursor:pointer; transition:transform .15s,box-shadow .15s,border-color .15s; position:relative; overflow:hidden; }
@@ -376,11 +379,12 @@ const STATUS_LABEL = { todo:'To Do', assigned:'Assigned', doing:'Doing', done:'C
 /* ══════════════════════════════════════════════════
    STATE
 ══════════════════════════════════════════════════ */
-let tasks   = [];
-let me      = null;
-let filter  = 'all';
-let panelId = null;
-let asnId   = null;
+let tasks       = [];
+let me          = null;
+let filter      = 'all';
+let panelId     = null;
+let asnId       = null;
+let draggingId  = null;
 
 /* ══════════════════════════════════════════════════
    API LAYER
@@ -658,12 +662,48 @@ function renderBoard() {
     } else {
       ct.forEach(t => body.appendChild(buildCard(t)));
     }
+
+    body.addEventListener('dragover', e => {
+      e.preventDefault();
+      body.classList.add('drag-over');
+    });
+    body.addEventListener('dragleave', e => {
+      if (!body.contains(e.relatedTarget)) body.classList.remove('drag-over');
+    });
+    body.addEventListener('drop', async e => {
+      e.preventDefault();
+      body.classList.remove('drag-over');
+      if (!draggingId) return;
+      const task = byId(draggingId);
+      if (!task || task.status === col.id) return;
+      const prev = task.status;
+      task.status = col.id;
+      renderBoard();
+      try {
+        const { task: updated } = await API.moveTask(draggingId, col.id, me);
+        updateTaskInState(updated);
+        if (panelId === draggingId) { renderPanelHead(updated); renderPanelBody(updated); }
+      } catch(err) {
+        task.status = prev;
+        renderBoard();
+      }
+    });
   });
 }
 
 function buildCard(task) {
   const card = document.createElement('div');
   card.className = 'card';
+  card.draggable = true;
+  card.addEventListener('dragstart', e => {
+    draggingId = task.id;
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  card.addEventListener('dragend', () => {
+    draggingId = null;
+    card.classList.remove('dragging');
+  });
   const m = task.assignee ? member(task.assignee) : null;
   const totalComments = (task.comments||[])
     .reduce((a,c) => a + 1 + (c.replies?.length||0), 0);
