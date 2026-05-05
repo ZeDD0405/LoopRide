@@ -74,8 +74,8 @@ header { background:linear-gradient(135deg,#3730a3,#6d28d9 55%,#7c3aed); padding
 /* ══ CARD ══ */
 .card { background:var(--card); border:1px solid var(--b2); border-radius:10px; padding:11px 12px; cursor:pointer; transition:transform .15s,box-shadow .15s,border-color .15s; position:relative; overflow:hidden; }
 .card:hover { transform:translateY(-2px); box-shadow:0 6px 22px rgba(0,0,0,.35); border-color:var(--b3); }
-.card-del-btn { position:absolute; top:7px; right:7px; width:22px; height:22px; border-radius:6px; border:none; background:transparent; color:var(--b3); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .13s,color .13s; z-index:2; line-height:1; }
-.card-del-btn:hover { background:rgba(220,38,38,.15); color:#ef4444; }
+.card-del-btn { width:22px; height:22px; border-radius:6px; border:1px solid rgba(220,38,38,.35); background:rgba(220,38,38,.1); color:#ef4444; font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .13s,border-color .13s; flex-shrink:0; line-height:1; }
+.card-del-btn:hover { background:rgba(220,38,38,.25); border-color:rgba(220,38,38,.6); }
 .card-del-confirm { position:absolute; inset:0; background:var(--card); border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; z-index:10; opacity:0; pointer-events:none; transition:opacity .18s; }
 .card-del-confirm.show { opacity:1; pointer-events:all; }
 .card-del-confirm p { font-size:12.5px; font-weight:600; color:var(--text); margin:0; }
@@ -637,7 +637,6 @@ function buildCard(task) {
 
   card.innerHTML = `
     ${unread > 0 ? `<div class="unread-count" title="${unread} unread message${unread>1?'s':''}">${unread > 9 ? '9+' : unread}</div>` : ''}
-    <button class="card-del-btn" title="Delete task">🗑</button>
     <div class="card-del-confirm">
       <p>Delete this task?</p>
       <div class="card-del-confirm-btns">
@@ -647,6 +646,7 @@ function buildCard(task) {
     </div>
     <div class="card-title">${esc(task.title)}</div>
     <div class="card-bottom">
+      <button class="card-del-btn" title="Delete task">🗑</button>
       ${m
         ? `<span class="chip" style="background:${m.color}15;color:${m.color};border:1px solid ${m.color}30">
              <span class="chip-dot" style="background:${m.color}"></span>${m.name}
@@ -835,7 +835,7 @@ function renderPanelBody(task) {
   /* Activity */
   const actEl = document.createElement('div');
   actEl.className = 'act-section';
-  const acts = [...(task.activity || [])].reverse();
+  const acts = [...(task.activity || [])].filter(a => !['commented','replied'].includes(a.type)).reverse();
   actEl.innerHTML = `
     <div class="sect-hd">Activity</div>
     <div class="act-list">
