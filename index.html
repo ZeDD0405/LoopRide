@@ -177,14 +177,10 @@ header { background:linear-gradient(135deg,#3730a3,#6d28d9 55%,#7c3aed); padding
 .m-opt-danger:hover { background:rgba(220,38,38,.1); }
 .modal-cancel { margin-top:10px; width:100%; background:var(--b1); border:1px solid var(--b2); color:var(--muted); border-radius:9px; padding:8px; font-size:12px; font-weight:700; cursor:pointer; transition:background .13s; }
 .modal-cancel:hover { background:var(--b2); color:var(--text); }
-.modal-loading { display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:18px 0 8px; }
+.modal-loading { display:none; flex-direction:column; align-items:center; justify-content:center; gap:12px; min-height:120px; }
 .modal-loading.show { display:flex; }
-.modal-loading-spinner { width:38px; height:38px; border:3px solid var(--b2); border-top-color:#a855f7; border-radius:50%; animation:spin .75s linear infinite; }
-.modal-loading-label { font-size:13px; font-weight:700; color:var(--muted); }
-.modal-loading-name { font-size:15px; font-weight:800; margin-top:-6px; }
-.modal-success-tick { font-size:32px; display:none; }
-.modal-success-tick.show { display:block; animation:tick-pop .3s cubic-bezier(.34,1.56,.64,1); }
-@keyframes tick-pop { from { transform:scale(0); opacity:0; } to { transform:scale(1); opacity:1; } }
+.modal-loading-spinner { width:40px; height:40px; border:3px solid var(--b2); border-top-color:#a855f7; border-radius:50%; animation:spin .75s linear infinite; }
+.modal-loading-text { font-size:13px; color:var(--muted); font-weight:600; }
 
 /* ══ SIDE PANEL ══ */
 .panel-wrap { position:fixed; inset:0; z-index:900; pointer-events:none; }
@@ -334,18 +330,13 @@ header { background:linear-gradient(135deg,#3730a3,#6d28d9 55%,#7c3aed); padding
 <!-- ══ ASSIGN MODAL ══ -->
 <div class="overlay" id="assignOverlay">
   <div class="modal">
-    <div id="mDefault">
-      <div class="modal-ttl">Assign to</div>
-      <div class="modal-sub" id="mSub"></div>
-      <div class="modal-opts" id="mOpts"></div>
-      <button class="modal-cancel" id="mCancel">Cancel</button>
-    </div>
+    <div class="modal-ttl" id="mTtl">Assign to</div>
+    <div class="modal-sub" id="mSub"></div>
+    <div class="modal-opts" id="mOpts"></div>
+    <button class="modal-cancel" id="mCancel">Cancel</button>
     <div class="modal-loading" id="mLoading">
       <div class="modal-loading-spinner"></div>
-      <div>
-        <div class="modal-loading-label">Assigning to</div>
-        <div class="modal-loading-name" id="mLoadingName"></div>
-      </div>
+      <div class="modal-loading-text">Saving…</div>
     </div>
   </div>
 </div>
@@ -815,11 +806,10 @@ document.getElementById('mOpts').addEventListener('click', async e => {
   const opt = e.target.closest('[data-pick]'); if (!opt) return;
   const pick = opt.dataset.pick === '__none__' ? null : opt.dataset.pick;
 
-  const pickedMember = pick ? MEMBERS.find(m => m.id === pick) : null;
-  const loadingName  = document.getElementById('mLoadingName');
-  loadingName.textContent    = pickedMember ? pickedMember.name : 'nobody';
-  loadingName.style.color    = pickedMember ? pickedMember.color : '#f87171';
-  document.getElementById('mDefault').style.display = 'none';
+  document.getElementById('mTtl').style.display    = 'none';
+  document.getElementById('mSub').style.display    = 'none';
+  document.getElementById('mOpts').style.display   = 'none';
+  document.getElementById('mCancel').style.display = 'none';
   document.getElementById('mLoading').classList.add('show');
 
   try {
@@ -828,8 +818,11 @@ document.getElementById('mOpts').addEventListener('click', async e => {
     closeAssign(); renderBoard();
     if (panelId === asnId) { renderPanelHead(task); renderPanelBody(task); }
   } catch(err) {
+    document.getElementById('mTtl').style.display    = '';
+    document.getElementById('mSub').style.display    = '';
+    document.getElementById('mOpts').style.display   = '';
+    document.getElementById('mCancel').style.display = '';
     document.getElementById('mLoading').classList.remove('show');
-    document.getElementById('mDefault').style.display = '';
   }
 });
 
@@ -840,7 +833,10 @@ document.getElementById('assignOverlay').addEventListener('click', e => {
 function closeAssign() {
   document.getElementById('assignOverlay').classList.remove('show');
   document.getElementById('mLoading').classList.remove('show');
-  document.getElementById('mDefault').style.display = '';
+  document.getElementById('mTtl').style.display    = '';
+  document.getElementById('mSub').style.display    = '';
+  document.getElementById('mOpts').style.display   = '';
+  document.getElementById('mCancel').style.display = '';
   asnId = null;
 }
 
